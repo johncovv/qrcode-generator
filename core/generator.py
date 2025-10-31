@@ -1,9 +1,11 @@
+from io import BufferedReader
 from PIL import Image, ImageDraw
 from uuid import uuid4
 from qrcode.constants import ERROR_CORRECT_H
 from qrcode.image.pil import PilImage
-from typing import TypedDict
+from typing import TypedDict, Optional
 from qrcode import QRCode
+from pydantic import BaseModel
 
 
 from core import storage
@@ -14,18 +16,46 @@ class QrCodeData(TypedDict):
     file_name: str
 
 
+class QrCodeGeneratorConfig(BaseModel):
+    qr_border: int = 2
+    hole_ratio: float = 0.2
+
+
 class QrCodeGenerator:
-    def generate(
+    def generate_on_memory(
         self,
         url: str,
         image_bytes: bytes | None = None,
-        qr_border: int = 2,  # border size of the QR code
-        hole_ratio: float = 0.2,  # empty space ratio for image (in percentage of QR code size)
+        config: Optional[QrCodeGeneratorConfig] = None,
+    ) -> BufferedReader:
+        temp_path, _ = self._generate(url, image_bytes=image_bytes, config=config)
+
+        return open(temp_path, "rb")
+
+    def generate_and_upload(
+        self,
+        url: str,
+        image_bytes: bytes | None = None,
+        config: Optional[QrCodeGeneratorConfig] = None,
     ) -> QrCodeData:
+        temp_path, filename = self._generate(
+            url, image_bytes=image_bytes, config=config
+        )
+
+        # Upload the file to S3 and get a temporary URL
+        file_url = self._upload_file(temp_path, filename)
+        return QrCodeData(file_url=file_url, file_name=filename)
+
+    def _generate(
+        self,
+        url: str,
+        image_bytes: bytes | None = None,
+        config: Optional[QrCodeGeneratorConfig] = None,
+    ) -> tuple[str, str]:
         qr = QRCode(
             version=1,
             error_correction=ERROR_CORRECT_H,
-            border=qr_border,
+            border=config.qr_border if config else 2,
             box_size=10,
         )
 
@@ -41,15 +71,15 @@ class QrCodeGenerator:
 
         # if provided, attach image at the center of the QR code
         if image_bytes:
-            qr_img = self._attach_image_on_qr(qr_img, image_bytes, hole_ratio)
+            qr_img = self._attach_image_on_qr(
+                qr_img, image_bytes, hole_ratio=config.hole_ratio if config else 0.2
+            )
 
         # Save QR code to a temporary file
         temp_path = f"/tmp/{filename}"
         qr_img.save(temp_path, format="PNG", optimize=True)
 
-        # Upload the file to S3 and get a temporary URL
-        file_url = storage.upload_file(temp_path, filename)
-        return QrCodeData(file_url=file_url, file_name=filename)
+        return temp_path, filename
 
     def _attach_image_on_qr(
         self, qr_image: Image.Image, image_bytes: bytes, hole_ratio: float = 0.2
@@ -73,6 +103,9 @@ class QrCodeGenerator:
         qr_image.alpha_composite(image, (x, y))
 
         return qr_image
+
+    def _upload_file(self, file_path: str, filename: str) -> str:
+        return storage.upload_file(file_path, filename)
 
 
 qrcode_generator = QrCodeGenerator()
