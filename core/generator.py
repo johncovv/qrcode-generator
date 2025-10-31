@@ -41,7 +41,7 @@ class QrCodeGenerator:
 
         # if provided, attach image at the center of the QR code
         if image_bytes:
-            qr_img = self.attach_image_on_qr(qr_img, image_bytes, hole_ratio)
+            qr_img = self._attach_image_on_qr(qr_img, image_bytes, hole_ratio)
 
         # Save QR code to a temporary file
         temp_path = f"/tmp/{filename}"
@@ -51,7 +51,7 @@ class QrCodeGenerator:
         file_url = storage.upload_file(temp_path, filename)
         return QrCodeData(file_url=file_url, file_name=filename)
 
-    def attach_image_on_qr(
+    def _attach_image_on_qr(
         self, qr_image: Image.Image, image_bytes: bytes, hole_ratio: float = 0.2
     ) -> Image.Image:
         import io
