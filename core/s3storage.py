@@ -1,25 +1,18 @@
 import boto3
-import os
 import mimetypes
 
 from core import settings
 
 
 class S3Storage:
-    def __init__(
-        self,
-        bucket_name,
-        aws_access_key_id=None,
-        aws_secret_access_key=None,
-        region_name=None,
-    ):
+
+    def __init__(self, bucket_name):
         self.bucket_name = bucket_name
         self.s3_client = boto3.client(
             "s3",
-            aws_access_key_id=aws_access_key_id or os.getenv("AWS_ACCESS_KEY_ID"),
-            aws_secret_access_key=aws_secret_access_key
-            or os.getenv("AWS_SECRET_ACCESS_KEY"),
-            region_name=region_name or os.getenv("AWS_REGION"),
+            aws_access_key_id=settings.aws_access_key_id,
+            aws_secret_access_key=settings.aws_secret_access_key,
+            region_name=settings.aws_region,
         )
 
     # Uploads a file to S3 and returns its URL
